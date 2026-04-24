@@ -10,16 +10,42 @@ import logging
 from dotenv import load_dotenv
 from database import Database
 
-load_dotenv()  # Carrega variáveis do arquivo .env automaticamente
+# =========================
+# FIX RENDER (PORTA FAKE)
+# =========================
+from threading import Thread
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# Configuração de logging
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running")
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
+
+Thread(target=run_server).start()
+
+# =========================
+# LOAD ENV
+# =========================
+load_dotenv()
+
+# =========================
+# LOGGING
+# =========================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 log = logging.getLogger("UBG-Bot")
 
-# Configuração de intents
+# =========================
+# INTENTS
+# =========================
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -28,7 +54,7 @@ intents.message_content = True
 class UBGBot(commands.Bot):
     def __init__(self):
         super().__init__(
-            command_prefix="!",  # prefix legacy (não usado com slash)
+            command_prefix="!",
             intents=intents,
             help_command=None
         )
@@ -37,11 +63,11 @@ class UBGBot(commands.Bot):
     async def setup_hook(self):
         """Carrega todos os cogs (módulos) ao iniciar."""
         cogs = ["cogs.economia", "cogs.apostas", "cogs.ranking", "cogs.perfil"]
+
         for cog in cogs:
             await self.load_extension(cog)
             log.info(f"Cog carregado: {cog}")
 
-        # Sincroniza os slash commands com o Discord
         await self.tree.sync()
         log.info("Slash commands sincronizados com o Discord.")
 
@@ -57,8 +83,9 @@ class UBGBot(commands.Bot):
 
 def main():
     token = os.getenv("DISCORD_TOKEN")
+
     if not token:
-        log.error("DISCORD_TOKEN não encontrado! Defina a variável de ambiente.")
+        log.error("DISCORD_TOKEN não encontrado!")
         return
 
     bot = UBGBot()
