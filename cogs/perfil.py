@@ -6,7 +6,7 @@ Comando: /perfil
 import discord
 from discord import app_commands
 from discord.ext import commands
-from .utils import fmt_moeda, COR_INFO
+from utils import fmt_moeda, COR_INFO
 
 
 class Perfil(commands.Cog):

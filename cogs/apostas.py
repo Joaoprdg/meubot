@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import uuid
-from .utils import (
+from utils import (
     embed_erro, embed_sucesso, embed_info,
     fmt_moeda, is_admin, COR_APOSTA, COR_GOLD, COR_SUCESSO, COR_ERRO
 )

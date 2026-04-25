@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 from datetime import datetime, timedelta
-from .utils import embed_erro, embed_sucesso, embed_info, fmt_moeda, COR_GOLD, COR_INFO
+from utils import embed_erro, embed_sucesso, embed_info, fmt_moeda, COR_GOLD, COR_INFO
 
 
 class Economia(commands.Cog):
