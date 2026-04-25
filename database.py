@@ -210,3 +210,15 @@ class Database:
         )
         row = c.fetchone()
         return dict(row) if row else None
+
+    def decrementar_stat(self, user_id: int, campo: str):
+        """Decrementa um campo de estatística, sem deixar abaixo de zero."""
+        campos_validos = {"vitorias", "derrotas", "total_apostas"}
+        if campo not in campos_validos:
+            raise ValueError(f"Campo inválido: {campo}")
+        c = self.conn.cursor()
+        c.execute(
+            f"UPDATE usuarios SET {campo} = MAX(0, {campo} - 1) WHERE user_id = ?",
+            (user_id,)
+        )
+        self.conn.commit()
