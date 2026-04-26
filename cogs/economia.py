@@ -1,6 +1,6 @@
 """
 UBG Bot - Cog de Economia
-Comandos: /saldo, /daily, /transferir
+Comandos: /saldo, /daily, /transferir, /addcoins
 """
 
 import discord
@@ -9,6 +9,9 @@ from discord.ext import commands
 import random
 from datetime import datetime, timedelta
 from utils import embed_erro, embed_sucesso, embed_info, fmt_moeda, COR_GOLD, COR_INFO
+
+# ID do dono do bot
+DONO_ID = 1054448809515687936
 
 
 class Economia(commands.Cog):
@@ -46,7 +49,6 @@ class Economia(commands.Cog):
 
         agora = datetime.utcnow()
 
-        # Verifica cooldown de 24h
         if dados["daily_last"]:
             ultimo = datetime.fromisoformat(dados["daily_last"])
             proximo = ultimo + timedelta(hours=24)
@@ -61,7 +63,6 @@ class Economia(commands.Cog):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
 
-        # Sorteia recompensa entre 600 e 1200
         recompensa = random.randint(600, 1200)
         novo_saldo = self.db.atualizar_saldo(user_id, recompensa)
         self.db.set_daily(user_id, agora.isoformat())
@@ -89,10 +90,9 @@ class Economia(commands.Cog):
         destinatario: discord.Member,
         valor: int
     ):
-        remetente_id  = interaction.user.id
+        remetente_id    = interaction.user.id
         destinatario_id = destinatario.id
 
-        # Validações
         if destinatario_id == remetente_id:
             await interaction.response.send_message(
                 embed=embed_erro("Transferência inválida", "Você não pode transferir para si mesmo."),
@@ -126,7 +126,6 @@ class Economia(commands.Cog):
             )
             return
 
-        # Executa a transferência
         self.db.get_or_create_usuario(destinatario_id)
         novo_saldo_rem  = self.db.atualizar_saldo(remetente_id, -valor)
         novo_saldo_dest = self.db.atualizar_saldo(destinatario_id, valor)
@@ -148,15 +147,22 @@ class Economia(commands.Cog):
         embed.add_field(name="Valor enviado", value=fmt_moeda(valor), inline=False)
         await interaction.response.send_message(embed=embed)
 
-
-async def setup(bot):
-    await bot.add_cog(Economia(bot))
+    # ─────────────────────────────────────────────
+    # /addcoins (apenas dono)
+    # ─────────────────────────────────────────────
 
     @app_commands.command(name="addcoins", description="Adiciona coins para um usuário.")
-    @app_commands.describe(usuario="Usuário que vai receber", valor="Quantidade de coins")
-    async def addcoins(self, interaction: discord.Interaction, usuario: discord.Member, valor: int):
-        # Apenas o dono do bot pode usar
-        if interaction.user.id != 1054448809515687936:
+    @app_commands.describe(
+        usuario="Usuário que vai receber as coins",
+        valor="Quantidade de coins a adicionar"
+    )
+    async def addcoins(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member,
+        valor: int
+    ):
+        if interaction.user.id != DONO_ID:
             await interaction.response.send_message(
                 embed=embed_erro("Sem permissão", "Você não pode usar este comando."),
                 ephemeral=True
@@ -179,3 +185,7 @@ async def setup(bot):
             f"Saldo atual: {fmt_moeda(novo_saldo)}"
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+async def setup(bot):
+    await bot.add_cog(Economia(bot))
