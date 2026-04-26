@@ -258,10 +258,8 @@ class Apostas(commands.Cog):
                     ganho = valor
 
                 self.db.atualizar_saldo(uid, ganho)
-                self.db.incrementar_stat(uid, "vitorias")
                 vencedores_info.append((uid, valor, ganho))
             else:
-                self.db.incrementar_stat(uid, "derrotas")
                 perdedores_info.append((uid, valor))
 
         # Monta embed de resultado
