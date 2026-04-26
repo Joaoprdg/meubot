@@ -151,3 +151,31 @@ class Economia(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Economia(bot))
+
+    @app_commands.command(name="addcoins", description="Adiciona coins para um usuário.")
+    @app_commands.describe(usuario="Usuário que vai receber", valor="Quantidade de coins")
+    async def addcoins(self, interaction: discord.Interaction, usuario: discord.Member, valor: int):
+        # Apenas o dono do bot pode usar
+        if interaction.user.id != 1054448809515687936:
+            await interaction.response.send_message(
+                embed=embed_erro("Sem permissão", "Você não pode usar este comando."),
+                ephemeral=True
+            )
+            return
+
+        if valor <= 0:
+            await interaction.response.send_message(
+                embed=embed_erro("Valor inválido", "O valor deve ser maior que zero."),
+                ephemeral=True
+            )
+            return
+
+        self.db.get_or_create_usuario(usuario.id)
+        novo_saldo = self.db.atualizar_saldo(usuario.id, valor)
+
+        embed = embed_sucesso(
+            "Coins adicionadas!",
+            f"{fmt_moeda(valor)} adicionadas para {usuario.mention}.\n"
+            f"Saldo atual: {fmt_moeda(novo_saldo)}"
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
