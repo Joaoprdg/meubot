@@ -43,7 +43,8 @@ class Database:
                 vitorias      INTEGER NOT NULL DEFAULT 0,
                 derrotas      INTEGER NOT NULL DEFAULT 0,
                 total_apostas INTEGER NOT NULL DEFAULT 0,
-                daily_last    TEXT    DEFAULT NULL
+                daily_last    TEXT    DEFAULT NULL,
+                saldo_banco   REAL    NOT NULL DEFAULT 0.0
             )
         """)
 
@@ -90,6 +91,7 @@ class Database:
         """)
 
         self.conn.commit()
+        self.migrar_banco()
         log.info("Banco de dados inicializado.")
 
     # ─────────────────────────────────────────────
@@ -239,3 +241,41 @@ class Database:
         c = self.conn.cursor()
         c.execute("DELETE FROM compras WHERE user_id = ? AND cargo_id = ?", (user_id, cargo_id))
         self.conn.commit()
+
+    # ─────────────────────────────────────────────
+    # Banco
+    # ─────────────────────────────────────────────
+
+    def get_saldo_banco(self, user_id: int) -> float:
+        self.get_or_create_usuario(user_id)
+        c = self.conn.cursor()
+        c.execute("SELECT saldo_banco FROM usuarios WHERE user_id = ?", (user_id,))
+        row = c.fetchone()
+        return row[0] if row else 0.0
+
+    def depositar_banco(self, user_id: int, valor: float) -> tuple[float, float]:
+        """Deposita no banco. Retorna (novo_saldo_carteira, novo_saldo_banco)."""
+        self.atualizar_saldo(user_id, -valor)
+        c = self.conn.cursor()
+        c.execute("UPDATE usuarios SET saldo_banco = saldo_banco + ? WHERE user_id = ?", (valor, user_id))
+        self.conn.commit()
+        u = self.get_usuario(user_id)
+        return u["saldo"], u["saldo_banco"]
+
+    def sacar_banco(self, user_id: int, valor: float) -> tuple[float, float]:
+        """Saca do banco. Retorna (novo_saldo_carteira, novo_saldo_banco)."""
+        c = self.conn.cursor()
+        c.execute("UPDATE usuarios SET saldo_banco = MAX(0, saldo_banco - ?) WHERE user_id = ?", (valor, user_id))
+        self.conn.commit()
+        self.atualizar_saldo(user_id, valor)
+        u = self.get_usuario(user_id)
+        return u["saldo"], u["saldo_banco"]
+
+    def migrar_banco(self):
+        """Adiciona coluna saldo_banco se não existir (migração segura)."""
+        try:
+            c = self.conn.cursor()
+            c.execute("ALTER TABLE usuarios ADD COLUMN saldo_banco REAL NOT NULL DEFAULT 0.0")
+            self.conn.commit()
+        except Exception:
+            pass  # Coluna já existe

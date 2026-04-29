@@ -26,14 +26,17 @@ class Economia(commands.Cog):
     @app_commands.command(name="saldo", description="Veja seu saldo atual ou o de outro usuário.")
     @app_commands.describe(usuario="Usuário que você quer consultar (opcional)")
     async def saldo(self, interaction: discord.Interaction, usuario: discord.Member = None):
-        alvo = usuario or interaction.user
+        alvo  = usuario or interaction.user
         dados = self.db.get_or_create_usuario(alvo.id)
+        banco = self.db.get_saldo_banco(alvo.id)
 
         embed = discord.Embed(
             title=f"💳 Carteira de {alvo.display_name}",
             color=COR_GOLD
         )
-        embed.add_field(name="Saldo", value=fmt_moeda(dados["saldo"]), inline=False)
+        embed.add_field(name="💰 Carteira", value=fmt_moeda(dados["saldo"]), inline=True)
+        embed.add_field(name="🏦 Banco",    value=fmt_moeda(banco),          inline=True)
+        embed.add_field(name="💎 Total",    value=fmt_moeda(dados["saldo"] + banco), inline=False)
         embed.set_thumbnail(url=alvo.display_avatar.url)
         embed.set_footer(text="Untitled Boxing Game Economy")
         await interaction.response.send_message(embed=embed)
