@@ -68,9 +68,15 @@ class UBGBot(commands.Bot):
         self.db = Database()
 
     async def setup_hook(self):
-        """Carrega todos os cogs (módulos) ao iniciar."""
-        cogs = ["cogs.economia", "cogs.apostas", "cogs.ranking", "cogs.perfil"]
-
+        cogs = [
+            "cogs.economia",
+            "cogs.apostas",
+            "cogs.ranking",
+            "cogs.perfil",
+            "cogs.loja",
+            "cogs.duelo",
+            "cogs.diversao",
+        ]
         for cog in cogs:
             await self.load_extension(cog)
             log.info(f"Cog carregado: {cog}")
@@ -90,7 +96,6 @@ class UBGBot(commands.Bot):
 
 def main():
     token = os.getenv("DISCORD_TOKEN")
-
     if not token:
         log.error("DISCORD_TOKEN não encontrado!")
         return
