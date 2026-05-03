@@ -1,12 +1,12 @@
 """
-UBG Bot - Módulo de Banco de Dados (Turso / libsql)
+UBG Bot - Módulo de Banco de Dados (Turso / libsql-experimental)
 Dados persistentes na nuvem — não resetam entre deploys.
 """
 
 import os
 import logging
 import threading
-import libsql_client
+import libsql_experimental as libsql
 from datetime import datetime
 
 log = logging.getLogger("UBG-DB")
@@ -23,8 +23,8 @@ class Database:
 
     def _get_conn(self):
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            self._local.conn = libsql_client.create_client_sync(
-                url=TURSO_URL,
+            self._local.conn = libsql.connect(
+                database=TURSO_URL,
                 auth_token=TURSO_TOKEN
             )
         return self._local.conn
@@ -34,14 +34,12 @@ class Database:
         return self._get_conn()
 
     def _execute(self, sql: str, params: tuple = ()):
-        return self.conn.execute(sql, params)
-
-    def _executemany(self, sql: str, params_list: list):
-        for params in params_list:
-            self.conn.execute(sql, params)
+        c = self.conn.cursor()
+        c.execute(sql, params)
+        self.conn.commit()
+        return c
 
     def _init_db(self):
-        """Cria as tabelas necessárias caso não existam."""
         tabelas = [
             """CREATE TABLE IF NOT EXISTS usuarios (
                 user_id       INTEGER PRIMARY KEY,
@@ -85,7 +83,6 @@ class Database:
         for sql in tabelas:
             self._execute(sql)
 
-        # Migração segura da coluna saldo_banco
         try:
             self._execute("ALTER TABLE usuarios ADD COLUMN saldo_banco REAL NOT NULL DEFAULT 0.0")
         except Exception:
@@ -97,14 +94,13 @@ class Database:
     # Usuários
     # ─────────────────────────────────────────────
 
-    def _row_to_dict(self, row, columns) -> dict:
-        return dict(zip(columns, row))
-
     def get_usuario(self, user_id: int) -> dict | None:
-        rs = self._execute("SELECT * FROM usuarios WHERE user_id = ?", (user_id,))
-        if not rs.rows:
+        c = self._execute("SELECT * FROM usuarios WHERE user_id = ?", (user_id,))
+        row = c.fetchone()
+        if not row:
             return None
-        return self._row_to_dict(rs.rows[0], [c.name for c in rs.columns])
+        cols = [d[0] for d in c.description]
+        return dict(zip(cols, row))
 
     def criar_usuario(self, user_id: int) -> dict:
         self._execute("INSERT OR IGNORE INTO usuarios (user_id) VALUES (?)", (user_id,))
@@ -134,9 +130,9 @@ class Database:
         self._execute(f"UPDATE usuarios SET {campo} = MAX(0, {campo} - 1) WHERE user_id = ?", (user_id,))
 
     def get_ranking(self, limite: int = 10) -> list[dict]:
-        rs = self._execute("SELECT * FROM usuarios ORDER BY vitorias DESC, saldo DESC LIMIT ?", (limite,))
-        cols = [c.name for c in rs.columns]
-        return [self._row_to_dict(row, cols) for row in rs.rows]
+        c = self._execute("SELECT * FROM usuarios ORDER BY vitorias DESC, saldo DESC LIMIT ?", (limite,))
+        cols = [d[0] for d in c.description]
+        return [dict(zip(cols, row)) for row in c.fetchall()]
 
     # ─────────────────────────────────────────────
     # Banco
@@ -144,8 +140,9 @@ class Database:
 
     def get_saldo_banco(self, user_id: int) -> float:
         self.get_or_create_usuario(user_id)
-        rs = self._execute("SELECT saldo_banco FROM usuarios WHERE user_id = ?", (user_id,))
-        return rs.rows[0][0] if rs.rows else 0.0
+        c = self._execute("SELECT saldo_banco FROM usuarios WHERE user_id = ?", (user_id,))
+        row = c.fetchone()
+        return row[0] if row else 0.0
 
     def depositar_banco(self, user_id: int, valor: float) -> tuple[float, float]:
         self.atualizar_saldo(user_id, -valor)
@@ -172,15 +169,17 @@ class Database:
         return self.get_aposta(aposta_id)
 
     def get_aposta(self, aposta_id: str) -> dict | None:
-        rs = self._execute("SELECT * FROM apostas WHERE aposta_id = ?", (aposta_id,))
-        if not rs.rows:
+        c = self._execute("SELECT * FROM apostas WHERE aposta_id = ?", (aposta_id,))
+        row = c.fetchone()
+        if not row:
             return None
-        return self._row_to_dict(rs.rows[0], [c.name for c in rs.columns])
+        cols = [d[0] for d in c.description]
+        return dict(zip(cols, row))
 
     def get_apostas_abertas(self) -> list[dict]:
-        rs = self._execute("SELECT * FROM apostas WHERE status = 'aberta'")
-        cols = [c.name for c in rs.columns]
-        return [self._row_to_dict(row, cols) for row in rs.rows]
+        c = self._execute("SELECT * FROM apostas WHERE status = 'aberta'")
+        cols = [d[0] for d in c.description]
+        return [dict(zip(cols, row)) for row in c.fetchall()]
 
     def fechar_aposta(self, aposta_id: str, vencedor: str):
         self._execute(
@@ -199,33 +198,37 @@ class Database:
             return False
 
     def get_palpites_da_aposta(self, aposta_id: str) -> list[dict]:
-        rs = self._execute("SELECT * FROM palpites WHERE aposta_id = ?", (aposta_id,))
-        cols = [c.name for c in rs.columns]
-        return [self._row_to_dict(row, cols) for row in rs.rows]
+        c = self._execute("SELECT * FROM palpites WHERE aposta_id = ?", (aposta_id,))
+        cols = [d[0] for d in c.description]
+        return [dict(zip(cols, row)) for row in c.fetchall()]
 
     def get_palpite_usuario(self, aposta_id: str, user_id: int) -> dict | None:
-        rs = self._execute(
+        c = self._execute(
             "SELECT * FROM palpites WHERE aposta_id = ? AND user_id = ?",
             (aposta_id, user_id)
         )
-        if not rs.rows:
+        row = c.fetchone()
+        if not row:
             return None
-        return self._row_to_dict(rs.rows[0], [c.name for c in rs.columns])
+        cols = [d[0] for d in c.description]
+        return dict(zip(cols, row))
 
     # ─────────────────────────────────────────────
     # Loja
     # ─────────────────────────────────────────────
 
     def get_itens_loja(self) -> list[dict]:
-        rs = self._execute("SELECT * FROM loja ORDER BY preco ASC")
-        cols = [c.name for c in rs.columns]
-        return [self._row_to_dict(row, cols) for row in rs.rows]
+        c = self._execute("SELECT * FROM loja ORDER BY preco ASC")
+        cols = [d[0] for d in c.description]
+        return [dict(zip(cols, row)) for row in c.fetchall()]
 
     def get_item_loja(self, cargo_id: str) -> dict | None:
-        rs = self._execute("SELECT * FROM loja WHERE cargo_id = ?", (cargo_id,))
-        if not rs.rows:
+        c = self._execute("SELECT * FROM loja WHERE cargo_id = ?", (cargo_id,))
+        row = c.fetchone()
+        if not row:
             return None
-        return self._row_to_dict(rs.rows[0], [c.name for c in rs.columns])
+        cols = [d[0] for d in c.description]
+        return dict(zip(cols, row))
 
     def adicionar_item_loja(self, cargo_id: str, nome: str, preco: float, descricao: str = ""):
         self._execute(
@@ -237,11 +240,11 @@ class Database:
         self._execute("DELETE FROM loja WHERE cargo_id = ?", (cargo_id,))
 
     def usuario_tem_item(self, user_id: int, cargo_id: str) -> bool:
-        rs = self._execute(
+        c = self._execute(
             "SELECT 1 FROM compras WHERE user_id = ? AND cargo_id = ?",
             (user_id, cargo_id)
         )
-        return len(rs.rows) > 0
+        return c.fetchone() is not None
 
     def registrar_compra(self, user_id: int, cargo_id: str):
         self._execute(
